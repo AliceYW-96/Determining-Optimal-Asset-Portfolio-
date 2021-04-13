@@ -1,0 +1,515 @@
+---
+title: "Case 4"
+output: pdf_document
+---
+
+```{r setup, include=FALSE}
+knitr::opts_chunk$set(echo = TRUE)
+library(matlib)
+library(magrittr)
+library(data.table)
+```
+
+## R Markdown
+
+This is an R Markdown document. Markdown is a simple formatting syntax for authoring HTML, PDF, and MS Word documents. For more details on using R Markdown see <http://rmarkdown.rstudio.com>.
+
+When you click the **Knit** button a document will be generated that includes both content as well as the output of any embedded R code chunks within the document. You can embed an R code chunk like this:
+
+```{r mean/sd/sr}
+dt
+
+rf = colMeans(dt[10])
+whole_means = colMeans(dt[6:9])
+whole_sd = apply(dt[6:9],2,sd)
+whole_sharpe = (whole_means - rf)/whole_sd
+
+unc_whole = rbind(whole_means, whole_sd, whole_sharpe)
+
+dt_table=data.table(dt)
+
+LILG = dt_table[INF1GRW1==1]
+
+HILG = dt_table[INF2GRW1==1]
+
+LIHG = dt_table[INF1GRW2==1]
+
+HIHG = dt_table[INF2GRW2==1]
+
+lilg_means = colMeans(LILG[,6:9])
+lilg_sd = apply(LILG[,6:9], 2, sd)
+lilg_sr = (lilg_means - rf)/lilg_sd
+
+lilg_whole = rbind(lilg_means, lilg_sd, lilg_sr)
+
+hilg_means = colMeans(HILG[,6:9])
+hilg_sd = apply(HILG[,6:9], 2, sd)
+hilg_sr = (hilg_means - rf)/hilg_sd
+
+hilg_whole = rbind(hilg_means, hilg_sd, hilg_sr)
+
+lihg_means = colMeans(LIHG[,6:9])
+lihg_sd = apply(LIHG[,6:9], 2, sd)
+lihg_sr = (lihg_means - rf)/lihg_sd
+
+lihg_whole = rbind(lihg_means, lihg_sd, lihg_sr)
+
+
+hihg_means = colMeans(HIHG[,6:9])
+hihg_sd = apply(HIHG[,6:9], 2, sd)
+hihg_sr = (hihg_means - rf)/hihg_sd
+
+hihg_whole = rbind(hihg_means, hihg_sd, hihg_sr)
+```
+
+```{r see tables}
+unc_whole
+lilg_whole
+hilg_whole
+lihg_whole
+hihg_whole
+```
+
+```{r cov}
+unc_cov = cov(dt[6:9])
+lilg_cov = cov(LILG[,6:9])
+hilg_cov = cov(HILG[,6:9])
+lihg_cov = cov(LIHG[,6:9])
+hihg_cov = cov(HIHG[,6:9])
+```
+
+Below is all the code for each of the summary tables for the different regimes. Did it in order: Unconditional, INF1GRW1, INF2GRW1, INF1GRW2, INF2GRW2. 
+```{r Unconditional Summary}
+id_vec = data.matrix(c(1,1,1,1))
+
+###MSR Calculation
+
+a = t(id_vec) %*% inv(unc_cov) %*% (whole_means - rf)
+
+b = t(inv(unc_cov)%*% (whole_means - rf))
+b = data.frame(b)
+
+
+MAXSR = b/a
+
+MSR_ER = sum(MAXSR * whole_means)
+MSR_SD = sqrt(as.matrix(MAXSR) %*% unc_cov %*% t(as.matrix(MAXSR)))
+MSR_SR = (MSR_ER - rf)/MSR_SD
+
+###GMV Calculation
+
+num = (inv(unc_cov)%*%id_vec)
+den = (t(id_vec)%*%inv(unc_cov)%*%id_vec)
+den = data.frame(den)
+
+GMV <- t(num)/den[1,]
+
+GMV_ER = sum(GMV * whole_means)
+GMV_SD = sqrt(as.matrix(GMV) %*% unc_cov %*% t(as.matrix(GMV)))
+GMV_SR = (GMV_ER - rf)/GMV_SD
+
+###Risk Aversion Calculation
+
+A <- c(1.3,2.8,6.5,10.5,16.9)
+
+#Numerator calculation
+num = inv(unc_cov) %*% (whole_means - rf)
+
+#Setting up empty matrix for results
+riskAv = matrix(ncol = 5, nrow = length(A))
+colnames(riskAv) <- c("A", "Stocks", "Bonds", "Gold", "Commodities")
+
+#For-Loop for every Risk Aversion Coefficient
+for (i in 1:length(A)) {
+  temp = num/A[i]
+  riskAv[i,1] = A[i]
+  riskAv[i, 2] = temp[1]
+  riskAv[i, 3] = temp[2]
+  riskAv[i, 4] = temp[3]
+  riskAv[i, 5] = temp[4]
+}
+
+###       Final Total Summary Table for Unconditional/Whole
+
+Sharpe_Ratios = matrix(ncol = 4, nrow = 7)
+colnames(Sharpe_Ratios) = c("Type", "Expected Returns", "Standard Deviation", "Sharpe Ratio")
+Sharpe_Ratios[1, 1] = "MaxSR"
+Sharpe_Ratios[1, c(2,3,4)] = c(MSR_ER, MSR_SD, MSR_SR)
+Sharpe_Ratios[2, 1] = "GMV"
+Sharpe_Ratios[2, c(2,3,4)] = c(GMV_ER, GMV_SD, GMV_SR)
+
+for (i in 1:nrow(riskAv)) {
+  temp_ER = sum(riskAv[i, c(2,3,4,5)] * whole_means[c(1,2,3,4)])
+  temp_sd = sqrt(t(riskAv[i, c(2,3,4,5)]) %*% unc_cov %*% as.matrix(riskAv[i, c(2,3,4,5)]))
+  temp_SR = (temp_ER - rf) / temp_sd
+  Sharpe_Ratios[i+2, 1] = paste("A = ", riskAv[i, 1])
+  Sharpe_Ratios[i+2, c(2,3,4)] = c(temp_ER, temp_sd, temp_SR)
+}
+
+Sharpe_Ratios
+```
+
+```{r Summary Table for Low Inflation Low Growth}
+### MSR Calculation
+
+id_vec = data.matrix(c(1,1,1,1))
+
+a = t(id_vec) %*% inv(lilg_cov) %*% (lilg_means - rf)
+
+b = t(inv(lilg_cov)%*% (lilg_means - rf))
+b = data.frame(b)
+
+
+MAXSR_lilg = b/a
+
+MSR_ER_lilg = sum(MAXSR_lilg * lilg_means)
+MSR_SD_lilg = sqrt(as.matrix(MAXSR_lilg) %*% lilg_cov %*% t(as.matrix(MAXSR_lilg)))
+MSR_SR_lilg = (MSR_ER_lilg - rf)/MSR_SD_lilg
+
+### Global Minimum Variance Calculation
+
+num = (inv(lilg_cov)%*%id_vec)
+den = (t(id_vec)%*%inv(lilg_cov)%*%id_vec)
+den = data.frame(den)
+
+GMV_lilg <- t(num)/den[1,]
+
+GMV_ER_lilg = sum(GMV_lilg * lilg_means)
+GMV_SD_lilg = sqrt(as.matrix(GMV_lilg) %*% lilg_cov %*% t(as.matrix(GMV_lilg)))
+GMV_SR_lilg = (GMV_ER_lilg - rf)/GMV_SD_lilg
+
+### Risk Aversion Calculation
+
+A <- c(1.3,2.8,6.5,10.5,16.9)
+
+#Numerator calculation
+num = inv(lilg_cov) %*% (lilg_means - rf)
+
+#Setting up empty matrix for results
+riskAv_lilg = matrix(ncol = 5, nrow = length(A))
+colnames(riskAv_lilg) <- c("A", "Stocks", "Bonds", "Gold", "Commodities")
+
+#For-Loop for every Risk Aversion Coefficient
+for (i in 1:length(A)) {
+  temp = num/A[i]
+  riskAv_lilg[i,1] = A[i]
+  riskAv_lilg[i, 2] = temp[1]
+  riskAv_lilg[i, 3] = temp[2]
+  riskAv_lilg[i, 4] = temp[3]
+  riskAv_lilg[i, 5] = temp[4]
+}
+
+### Final Total Summary Table for Low Inflation, Low Growth
+
+Sharpe_Ratios_lilg = matrix(ncol = 4, nrow = 7)
+colnames(Sharpe_Ratios_lilg) = c("Type", "Expected Returns", "Standard Deviation", "Sharpe Ratio")
+Sharpe_Ratios_lilg[1, 1] = "MaxSR"
+Sharpe_Ratios_lilg[1, c(2,3,4)] = c(MSR_ER_lilg, MSR_SD_lilg, MSR_SR_lilg)
+Sharpe_Ratios_lilg[2, 1] = "GMV"
+Sharpe_Ratios_lilg[2, c(2,3,4)] = c(GMV_ER_lilg, GMV_SD_lilg, GMV_SR_lilg)
+
+for (i in 1:nrow(riskAv_lilg)) {
+  temp_ER = sum(riskAv_lilg[i, c(2,3,4,5)] * lilg_means[c(1,2,3,4)])
+  temp_sd = sqrt(t(riskAv_lilg[i, c(2,3,4,5)]) %*% lilg_cov %*% as.matrix(riskAv_lilg[i, c(2,3,4,5)]))
+  temp_SR = (temp_ER - rf) / temp_sd
+  Sharpe_Ratios_lilg[i+2, 1] = paste("A = ", riskAv_lilg[i, 1])
+  Sharpe_Ratios_lilg[i+2, c(2,3,4)] = c(temp_ER, temp_sd, temp_SR)
+}
+
+Sharpe_Ratios_lilg
+```
+
+
+```{r Summary Table for High Inflation Low Growth}
+###MSR Calculation
+
+id_vec = data.matrix(c(1,1,1,1))
+
+a = t(id_vec) %*% inv(hilg_cov) %*% (hilg_means - rf)
+
+b = t(inv(hilg_cov)%*% (hilg_means - rf))
+b = data.frame(b)
+
+
+MAXSR_hilg = b/a
+
+MSR_ER_hilg = sum(MAXSR_hilg * hilg_means)
+MSR_SD_hilg = sqrt(as.matrix(MAXSR_hilg) %*% hilg_cov %*% t(as.matrix(MAXSR_hilg)))
+MSR_SR_hilg = (MSR_ER_hilg - rf)/MSR_SD_hilg
+
+### GMV Calculation
+
+num = (inv(hilg_cov)%*%id_vec)
+den = (t(id_vec)%*%inv(hilg_cov)%*%id_vec)
+den = data.frame(den)
+
+GMV_hilg <- t(num)/den[1,]
+
+GMV_ER_hilg = sum(GMV_hilg * hilg_means)
+GMV_SD_hilg = sqrt(as.matrix(GMV_hilg) %*% hilg_cov %*% t(as.matrix(GMV_hilg)))
+GMV_SR_hilg = (GMV_ER_hilg - rf)/GMV_SD_hilg
+
+###Risk Aversion Calculation
+
+A <- c(1.3,2.8,6.5,10.5,16.9)
+
+#Numerator calculation
+num = inv(hilg_cov) %*% (hilg_means - rf)
+
+#Setting up empty matrix for results
+riskAv_hilg = matrix(ncol = 5, nrow = length(A))
+colnames(riskAv_hilg) <- c("A", "Stocks", "Bonds", "Gold", "Commodities")
+
+#For-Loop for every Risk Aversion Coefficient
+for (i in 1:length(A)) {
+  temp = num/A[i]
+  riskAv_hilg[i,1] = A[i]
+  riskAv_hilg[i, 2] = temp[1]
+  riskAv_hilg[i, 3] = temp[2]
+  riskAv_hilg[i, 4] = temp[3]
+  riskAv_hilg[i, 5] = temp[4]
+}
+
+### Final Total Summary Table for High Inflation, Low Growth
+
+Sharpe_Ratios_hilg = matrix(ncol = 4, nrow = 7)
+colnames(Sharpe_Ratios_hilg) = c("Type", "Expected Returns", "Standard Deviation", "Sharpe Ratio")
+Sharpe_Ratios_hilg[1, 1] = "MaxSR"
+Sharpe_Ratios_hilg[1, c(2,3,4)] = c(MSR_ER_hilg, MSR_SD_hilg, MSR_SR_hilg)
+Sharpe_Ratios_hilg[2, 1] = "GMV"
+Sharpe_Ratios_hilg[2, c(2,3,4)] = c(GMV_ER_hilg, GMV_SD_hilg, GMV_SR_hilg)
+
+for (i in 1:nrow(riskAv_hilg)) {
+  temp_ER = sum(riskAv_hilg[i, c(2,3,4,5)] * hilg_means[c(1,2,3,4)])
+  temp_sd = sqrt(t(riskAv_hilg[i, c(2,3,4,5)]) %*% hilg_cov %*% as.matrix(riskAv_hilg[i, c(2,3,4,5)]))
+  temp_SR = (temp_ER - rf) / temp_sd
+  Sharpe_Ratios_hilg[i+2, 1] = paste("A = ", riskAv_hilg[i, 1])
+  Sharpe_Ratios_hilg[i+2, c(2,3,4)] = c(temp_ER, temp_sd, temp_SR)
+}
+
+Sharpe_Ratios_hilg
+```
+
+
+```{r Summary Tbale for Low Inflation High Growth}
+###MSR Calculation
+
+id_vec = data.matrix(c(1,1,1,1))
+
+a = t(id_vec) %*% inv(lihg_cov) %*% (lihg_means - rf)
+
+b = t(inv(lihg_cov)%*% (lihg_means - rf))
+b = data.frame(b)
+
+
+MAXSR_lihg = b/a
+
+MSR_ER_lihg = sum(MAXSR_lihg * lihg_means)
+MSR_SD_lihg = sqrt(as.matrix(MAXSR_lihg) %*% lihg_cov %*% t(as.matrix(MAXSR_lihg)))
+MSR_SR_lihg = (MSR_ER_lihg - rf)/MSR_SD_lihg
+
+###GMV Calculation
+
+num = (inv(lihg_cov)%*%id_vec)
+den = (t(id_vec)%*%inv(lihg_cov)%*%id_vec)
+den = data.frame(den)
+
+GMV_lihg <- t(num)/den[1,]
+
+GMV_ER_lihg = sum(GMV_lihg * lihg_means)
+GMV_SD_lihg = sqrt(as.matrix(GMV_lihg) %*% lihg_cov %*% t(as.matrix(GMV_lihg)))
+GMV_SR_lihg = (GMV_ER_lihg - rf)/GMV_SD_lihg
+
+### Risk Aversion Calculation
+
+A <- c(1.3,2.8,6.5,10.5,16.9)
+
+#Numerator calculation
+num = inv(lihg_cov) %*% (lihg_means - rf)
+
+#Setting up empty matrix for results
+riskAv_lihg = matrix(ncol = 5, nrow = length(A))
+colnames(riskAv_lihg) <- c("A", "Stocks", "Bonds", "Gold", "Commodities")
+
+#For-Loop for every Risk Aversion Coefficient
+for (i in 1:length(A)) {
+  temp = num/A[i]
+  riskAv_lihg[i,1] = A[i]
+  riskAv_lihg[i, 2] = temp[1]
+  riskAv_lihg[i, 3] = temp[2]
+  riskAv_lihg[i, 4] = temp[3]
+  riskAv_lihg[i, 5] = temp[4]
+}
+
+### Final Total Summary Table for Low Inflation, High Growth
+
+Sharpe_Ratios_lihg = matrix(ncol = 4, nrow = 7)
+colnames(Sharpe_Ratios_lihg) = c("Type", "Expected Returns", "Standard Deviation", "Sharpe Ratio")
+Sharpe_Ratios_lihg[1, 1] = "MaxSR"
+Sharpe_Ratios_lihg[1, c(2,3,4)] = c(MSR_ER_lihg, MSR_SD_lihg, MSR_SR_lihg)
+Sharpe_Ratios_lihg[2, 1] = "GMV"
+Sharpe_Ratios_lihg[2, c(2,3,4)] = c(GMV_ER_lihg, GMV_SD_lihg, GMV_SR_lihg)
+
+for (i in 1:nrow(riskAv_lihg)) {
+  temp_ER = sum(riskAv_lihg[i, c(2,3,4,5)] * lihg_means[c(1,2,3,4)])
+  temp_sd = sqrt(t(riskAv_lihg[i, c(2,3,4,5)]) %*% lihg_cov %*% as.matrix(riskAv_lihg[i, c(2,3,4,5)]))
+  temp_SR = (temp_ER - rf) / temp_sd
+  Sharpe_Ratios_lihg[i+2, 1] = paste("A = ", riskAv_lihg[i, 1])
+  Sharpe_Ratios_lihg[i+2, c(2,3,4)] = c(temp_ER, temp_sd, temp_SR)
+}
+
+Sharpe_Ratios_lihg
+```
+
+
+```{r Summary Table for High Inflation High Growth}
+###MSR Calculation
+
+id_vec = data.matrix(c(1,1,1,1))
+
+a = t(id_vec) %*% inv(hihg_cov) %*% (hihg_means - rf)
+
+b = t(inv(hihg_cov)%*% (hihg_means - rf))
+b = data.frame(b)
+
+
+MAXSR_hihg = b/a
+
+MSR_ER_hihg = sum(MAXSR_hihg * hihg_means)
+MSR_SD_hihg = sqrt(as.matrix(MAXSR_hihg) %*% hihg_cov %*% t(as.matrix(MAXSR_hihg)))
+MSR_SR_hihg = (MSR_ER_hihg - rf)/MSR_SD_hihg
+
+###GMV Calculation
+
+num = (inv(hihg_cov)%*%id_vec)
+den = (t(id_vec)%*%inv(hihg_cov)%*%id_vec)
+den = data.frame(den)
+
+GMV_hihg <- t(num)/den[1,]
+
+GMV_ER_hihg = sum(GMV_hihg * hihg_means)
+GMV_SD_hihg = sqrt(as.matrix(GMV_hihg) %*% hihg_cov %*% t(as.matrix(GMV_hihg)))
+GMV_SR_hihg = (GMV_ER_hihg - rf)/GMV_SD_hihg
+
+###Risk Aversion Calculation
+
+A <- c(1.3,2.8,6.5,10.5,16.9)
+
+#Numerator calculation
+num = inv(hihg_cov) %*% (hihg_means - rf)
+
+#Setting up empty matrix for results
+riskAv_hihg = matrix(ncol = 5, nrow = length(A))
+colnames(riskAv_hihg) <- c("A", "Stocks", "Bonds", "Gold", "Commodities")
+
+#For-Loop for every Risk Aversion Coefficient
+for (i in 1:length(A)) {
+  temp = num/A[i]
+  riskAv_hihg[i,1] = A[i]
+  riskAv_hihg[i, 2] = temp[1]
+  riskAv_hihg[i, 3] = temp[2]
+  riskAv_hihg[i, 4] = temp[3]
+  riskAv_hihg[i, 5] = temp[4]
+}
+
+### Final Total Summary Table for High Inflation High Growth
+
+Sharpe_Ratios_hihg = matrix(ncol = 4, nrow = 7)
+colnames(Sharpe_Ratios_hihg) = c("Type", "Expected Returns", "Standard Deviation", "Sharpe Ratio")
+Sharpe_Ratios_hihg[1, 1] = "MaxSR"
+Sharpe_Ratios_hihg[1, c(2,3,4)] = c(MSR_ER_hihg, MSR_SD_hihg, MSR_SR_hihg)
+Sharpe_Ratios_hihg[2, 1] = "GMV"
+Sharpe_Ratios_hihg[2, c(2,3,4)] = c(GMV_ER_hihg, GMV_SD_hihg, GMV_SR_hihg)
+
+for (i in 1:nrow(riskAv_hihg)) {
+  temp_ER = sum(riskAv_hihg[i, c(2,3,4,5)] * hihg_means[c(1,2,3,4)])
+  temp_sd = sqrt(t(riskAv_hihg[i, c(2,3,4,5)]) %*% hihg_cov %*% as.matrix(riskAv_hihg[i, c(2,3,4,5)]))
+  temp_SR = (temp_ER - rf) / temp_sd
+  Sharpe_Ratios_hihg[i+2, 1] = paste("A = ", riskAv_hihg[i, 1])
+  Sharpe_Ratios_hihg[i+2, c(2,3,4)] = c(temp_ER, temp_sd, temp_SR)
+}
+
+Sharpe_Ratios_hihg
+```
+
+
+Below is the summary sheet. Order is Unconditional, INF1GRW1, INF2GRW1, INF1GRW2, INF2GRW2
+```{r summary whole}
+summary = rbind(whole_means, whole_sd, whole_sharpe, riskAv[3,2:5])
+row.names(summary) = c("Mean", "Standard Deviation", "Sharpe Ratio", "6.5-Optimal Portfolio")
+
+
+summary_lilg = rbind(lilg_means, lilg_sd, lilg_sr, riskAv_lilg[3,2:5])
+row.names(summary_lilg) = c("Mean", "Standard Deviation", "Sharpe Ratio", "6.5-Optimal Portfolio")
+
+summary_hilg = rbind(hilg_means, hilg_sd, hilg_sr, riskAv_hilg[3,2:5])
+row.names(summary_hilg) = c("Mean", "Standard Deviation", "Sharpe Ratio", "6.5-Optimal Portfolio")
+
+summary_lihg = rbind(lihg_means, lihg_sd, lihg_sr, riskAv_lihg[3,2:5])
+row.names(summary_lihg) = c("Mean", "Standard Deviation", "Sharpe Ratio", "6.5-Optimal Portfolio")
+
+summary_hihg = rbind(hihg_means, hihg_sd, hihg_sr, riskAv_hihg[3,2:5])
+row.names(summary_hihg) = c("Mean", "Standard Deviation", "Sharpe Ratio", "6.5-Optimal Portfolio")
+
+
+summary
+summary_lilg
+summary_hilg
+summary_lihg
+summary_hihg
+```
+
+Below are the calculations for the Static and Tilt Portfolios. 
+```{r Static and Titl Portfolios}
+
+new_weights = matrix(ncol = 4, nrow = 5)
+
+
+  for (j in 1:4){
+    new_weights[1,j] = 0.25*summary_lilg[4,j]+0.25*summary_lihg[4,j]+0.25*summary_hilg[4,j]+0.25*summary_hihg[4,j]
+    new_weights[2,j] = 0.5*summary_lilg[4,j]+(1/6)*summary_lihg[4,j]+(1/6)*summary_hilg[4,j]+(1/6)*summary_hihg[4,j]
+    new_weights[3,j] = (1/6)*summary_lilg[4,j]+0.5*summary_lihg[4,j]+(1/6)*summary_hilg[4,j]+(1/6)*summary_hihg[4,j]
+    new_weights[4,j] = (1/6)*summary_lilg[4,j]+(1/6)*summary_lihg[4,j]+(0.5)*summary_hilg[4,j]+(1/6)*summary_hihg[4,j]
+    new_weights[5,j] = (1/6)*summary_lilg[4,j]+(1/6)*summary_lihg[4,j]+(1/6)*summary_hilg[4,j]+(0.5)*summary_hihg[4,j]
+  }
+new_weights = as.data.frame(new_weights)
+row.names(new_weights) =  c("Static - EW Portfolio", "Tilt - INF1GRW1", "Tilt - INF1GRW2","Tilt - INF2GRW1", "Tilt - INF2GRW2")
+colnames(new_weights) = c("Stocks", "Bonds", "Gold", "Commodities")
+
+new_weights
+```
+
+
+Below should be the answer for question 4. Tried to optimize this as previous summary wasn't very efficient.
+```{r Question 4}
+regimes = c(summary[4,],summary_lilg[4,],summary_hilg[4,],summary_lihg[4,],summary_hihg[4,])
+ports = c(summary[1,],summary_lilg[1,],summary_hilg[1,],summary_lihg[1,],summary_hihg[1,])
+cov = c(unc_cov, lilg_cov, hilg_cov, lihg_cov, hihg_cov)
+
+final = matrix(NA, nrow=10,ncol=5)
+for (i in 1:5){
+  for (j in 1:5){
+    final[i,j] = ((sum(regimes[(4*i-3):(4*i)]*ports[(4*j-3):(4*j)])-rf)/(sqrt(t(regimes[(4*i-3):(4*i)])%*%                                                                    matrix(cov[(16*j-15):(16*j)],ncol=4,nrow=4)%*%as.matrix(regimes[(4*i-3):(4*i)]))))
+    }
+}
+for (i in 1:5){
+  for (j in 1:5){
+    test = t(as.matrix(new_weights)[i,]) %*% matrix(cov[(16*j-15):(16*j)],ncol=4,nrow=4)
+    final[i+5,j] = ((sum(as.matrix(new_weights)[i,]*ports[(4*j-3):(4*j)])-rf)/(sqrt(test%*%as.matrix(new_weights)[i,])))
+  }
+}
+
+
+colnames(final) = c("Unconditional", "INF1GRW1", "INF2GRW1","INF1GRW2", "INF2GRW2")
+rownames(final) = c("6.5 Optimal Portfolio Unconditional","6.5 Optimal Portfolio INF1GRW1","6.5 Optimal Portfolio INF2GRW1","6.5 Optimal Portfolio INF1GRW2","6.5 Optimal Portfolio INF2GRW2","Static - EW Portfolio", "Tilt - INF1GRW1", "Tilt - INF1GRW2","Tilt - INF2GRW1", "Tilt - INF2GRW2")
+final
+```
+
+```{r Presentation Question 2}
+Table2 = rbind(cbind(MAXSR,"Sharpe Ratio" = MSR_SR),cbind(MAXSR_lilg,"Sharpe Ratio" = MSR_SR_lilg),cbind(MAXSR_hilg,"Sharpe Ratio" = MSR_SR_hilg),cbind(MAXSR_lihg,"Sharpe Ratio" = MSR_SR_lihg),cbind(MAXSR_hihg,"Sharpe Ratio" = MSR_SR_hihg))
+
+colnames(Table2)=c("Stocks", "Bonds", "Gold", "Commodities","Sharpe Ratio")
+rownames(Table2)=c("Unconditional", "INF1GRW1", "INF2GRW1","INF1GRW2", "INF2GRW2")
+Table2
+```
+
